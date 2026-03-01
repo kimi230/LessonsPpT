@@ -10,6 +10,7 @@
 
 | # | 디렉토리 | 주제 |
 |---|---------|------|
+| 00 | [00-core-mindset](./00-core-mindset/) | **핵심 마인드셋** (LLM에게 멍청함을 들키지 마라, 캡처 습관화, 컨텍스트로 차원을 좁혀라) |
 | 01 | [01-llm-definition](./01-llm-definition/) | LLM 정의와 핵심 속성 (다음 토큰 예측, 비결정론, 컨텍스트 의존, 형식 유도) |
 | 02 | [02-ai-strengths](./02-ai-strengths/) | AI 강점 5가지 (인사이트, 반복, 멀티에이전트, 코칭, 학습 가속) |
 | 03 | [03-computing-strengths](./03-computing-strengths/) | 전통 컴퓨팅의 강점 (결정론적 처리, 하이브리드 아키텍처) |
