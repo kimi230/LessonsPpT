@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI는 챗봇이 아니다 — LLM 모듈 사고와 생산성 워크플로우</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #1a1a2e;
+  --accent: #6c5ce7;
+  --accent2: #a29bfe;
+  --warn: #fd79a8;
+  --success: #00b894;
+  --info: #0984e3;
+  --gold: #fdcb6e;
+  --text: #dfe6e9;
+  --text2: #b2bec3;
+  --gradient1: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  --gradient2: linear-gradient(135deg, #fd79a8, #e17055);
+  --gradient3: linear-gradient(135deg, #00b894, #00cec9);
+  --gradient4: linear-gradient(135deg, #0984e3, #74b9ff);
+  --gradient5: linear-gradient(135deg, #fdcb6e, #e17055);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ─── Slide Container ─── */
+#deck {
+  width: 100vw; height: 100vh;
+  position: relative;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 60px 80px;
+  opacity: 0;
+  transform: translateX(60px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  pointer-events: none;
+  overflow-y: auto;
+}
+
+.slide.active {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.slide.exit-left {
+  opacity: 0;
+  transform: translateX(-60px);
+}
+
+/* ─── Typography ─── */
+h1 { font-size: 3rem; font-weight: 900; line-height: 1.2; margin-bottom: 16px; }
+h2 { font-size: 2.2rem; font-weight: 700; line-height: 1.3; margin-bottom: 12px; }
+h3 { font-size: 1.5rem; font-weight: 500; color: var(--accent2); margin-bottom: 8px; }
+p, li { font-size: 1.15rem; line-height: 1.8; color: var(--text2); }
+.big-number { font-size: 5rem; font-weight: 900; line-height: 1; }
+.highlight { color: var(--accent2); }
+.warn { color: var(--warn); }
+.success { color: var(--success); }
+.info { color: var(--info); }
+.gold { color: var(--gold); }
+code { font-family: 'JetBrains Mono', monospace; background: var(--surface2); padding: 2px 8px; border-radius: 4px; font-size: 0.95rem; }
+
+/* ─── Act Badge ─── */
+.act-badge {
+  position: absolute;
+  top: 24px; left: 32px;
+  font-size: 0.85rem; font-weight: 700;
+  padding: 6px 16px;
+  border-radius: 20px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.act1 { background: var(--gradient1); color: #fff; }
+.act2 { background: var(--gradient4); color: #fff; }
+.act3 { background: var(--gradient3); color: #fff; }
+.act4 { background: var(--gradient5); color: #fff; }
+.act5 { background: var(--gradient2); color: #fff; }
+
+/* ─── Cards / Grid ─── */
+.card-grid {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+  max-width: 1100px;
+}
+.g2 { grid-template-columns: 1fr 1fr; }
+.g3 { grid-template-columns: 1fr 1fr 1fr; }
+.g4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.g5 { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid rgba(108,92,231,0.2);
+  border-radius: 16px;
+  padding: 28px 24px;
+  transition: transform 0.3s ease, border-color 0.3s ease;
+}
+.card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+}
+.card h4 {
+  font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; color: var(--text);
+}
+.card p, .card li {
+  font-size: 0.95rem; line-height: 1.7;
+}
+
+/* ─── Diagram Boxes ─── */
+.diagram-row {
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  justify-content: center; margin: 20px 0;
+}
+.dbox {
+  padding: 18px 28px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-align: center;
+  min-width: 160px;
+}
+.dbox.purple { background: var(--gradient1); color:#fff; }
+.dbox.blue { background: var(--gradient4); color:#fff; }
+.dbox.green { background: var(--gradient3); color:#fff; }
+.dbox.red { background: var(--gradient2); color:#fff; }
+.dbox.gold { background: var(--gradient5); color:#fff; }
+.arrow { font-size: 2rem; color: var(--accent2); }
+
+/* ─── Bar Chart ─── */
+.bar-chart { width: 100%; max-width: 700px; margin: 16px 0; }
+.bar-row { display: flex; align-items: center; margin: 8px 0; }
+.bar-label { width: 180px; font-size: 0.9rem; text-align: right; padding-right: 12px; color: var(--text2); }
+.bar-track { flex: 1; height: 28px; background: var(--surface); border-radius: 6px; overflow: hidden; position: relative; }
+.bar-fill {
+  height: 100%; border-radius: 6px;
+  display: flex; align-items: center; padding-left: 10px;
+  font-size: 0.8rem; font-weight: 700; color: #fff;
+  transition: width 1s ease;
+  width: 0;
+}
+.slide.active .bar-fill { /* width set inline */ }
+
+/* ─── Comparison Table ─── */
+.cmp-table {
+  width: 100%; max-width: 1000px;
+  border-collapse: separate; border-spacing: 0;
+  margin: 16px 0;
+}
+.cmp-table th {
+  background: var(--surface2); padding: 14px 18px;
+  font-size: 0.95rem; font-weight: 700; text-align: left;
+  border-bottom: 2px solid var(--accent);
+}
+.cmp-table td {
+  padding: 12px 18px; font-size: 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.06);
+  color: var(--text2);
+}
+.cmp-table tr:hover td { background: rgba(108,92,231,0.08); }
+
+/* ─── Flow Steps ─── */
+.flow-steps {
+  display: flex; gap: 0; align-items: center; justify-content: center;
+  flex-wrap: wrap; margin: 24px 0;
+}
+.flow-step {
+  background: var(--surface);
+  border: 1px solid rgba(108,92,231,0.3);
+  border-radius: 12px;
+  padding: 16px 20px;
+  text-align: center;
+  min-width: 130px;
+}
+.flow-step .num {
+  display: inline-block;
+  width: 28px; height: 28px; line-height: 28px;
+  border-radius: 50%; background: var(--accent);
+  color: #fff; font-weight: 700; font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+.flow-arrow { font-size: 1.5rem; color: var(--accent2); padding: 0 4px; }
+
+/* ─── U-Curve SVG ─── */
+.u-curve-container { margin: 16px auto; text-align: center; }
+.u-curve-container svg { max-width: 500px; width: 100%; }
+
+/* ─── Progress Bar ─── */
+#progress {
+  position: fixed; top: 0; left: 0;
+  height: 3px; background: var(--gradient1);
+  transition: width 0.4s ease; z-index: 100;
+}
+
+/* ─── Nav ─── */
+#nav {
+  position: fixed; bottom: 24px; right: 32px;
+  display: flex; gap: 10px; z-index: 100;
+}
+#nav button {
+  width: 48px; height: 48px; border-radius: 50%;
+  border: 1px solid var(--accent); background: var(--surface);
+  color: var(--accent2); font-size: 1.3rem; cursor: pointer;
+  transition: background 0.2s;
+  display: flex; align-items: center; justify-content: center;
+}
+#nav button:hover { background: var(--accent); color: #fff; }
+
+#slide-num {
+  position: fixed; bottom: 30px; left: 32px;
+  font-size: 0.85rem; color: var(--text2); z-index: 100;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ─── Timer ─── */
+#timer-bar {
+  position: fixed; bottom: 0; left: 0;
+  height: 4px; background: var(--gradient3);
+  transition: width 0.3s ease; z-index: 100;
+}
+
+/* ─── Animations ─── */
+.fade-in-up {
+  opacity: 0; transform: translateY(30px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.slide.active .fade-in-up { opacity: 1; transform: translateY(0); }
+.slide.active .delay1 { transition-delay: 0.15s; }
+.slide.active .delay2 { transition-delay: 0.3s; }
+.slide.active .delay3 { transition-delay: 0.45s; }
+.slide.active .delay4 { transition-delay: 0.6s; }
+.slide.active .delay5 { transition-delay: 0.75s; }
+
+/* ─── TOC ─── */
+.toc-list { list-style: none; text-align: left; max-width: 700px; }
+.toc-list li {
+  padding: 10px 0;
+  font-size: 1.2rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex; align-items: center; gap: 12px;
+}
+.toc-time {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent2); font-size: 0.9rem; min-width: 60px;
+}
+
+/* ─── Pulse ─── */
+@keyframes pulse { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.05); } }
+.pulse { animation: pulse 2s infinite; }
+
+/* ─── Responsive ─── */
+@media (max-width: 900px) {
+  .slide { padding: 40px 30px; }
+  h1 { font-size: 2rem; }
+  h2 { font-size: 1.6rem; }
+  .big-number { font-size: 3.5rem; }
+  .g2,.g3,.g4,.g5 { grid-template-columns: 1fr; }
+  .diagram-row { flex-direction: column; }
+  .flow-steps { flex-direction: column; }
+  .flow-arrow { transform: rotate(90deg); }
+}
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div id="slide-num"></div>
+<div id="timer-bar"></div>
+
+<div id="nav">
+  <button onclick="prev()" aria-label="이전">&#8592;</button>
+  <button onclick="next()" aria-label="다음">&#8594;</button>
+</div>
+
+<div id="deck">
+
+<!-- ============================================================ -->
+<!-- SLIDE 0: TITLE -->
+<!-- ============================================================ -->
+<div class="slide active" data-act="0">
+  <h3 class="fade-in-up" style="letter-spacing:3px;">2시간 집중 강의</h3>
+  <h1 class="fade-in-up delay1" style="text-align:center; max-width:900px;">
+    AI는 챗봇이 아니다<br>
+    <span class="highlight">LLM 모듈 사고와 생산성 워크플로우</span>
+  </h1>
+  <p class="fade-in-up delay2" style="margin-top:24px; font-size:1.1rem; color:var(--text2); text-align:center;">
+    LLM = 확률적 함수(모듈) &nbsp;|&nbsp; 기존 컴퓨팅과 조합해 생산성을 극대화
+  </p>
+  <div class="diagram-row fade-in-up delay3" style="margin-top:40px;">
+    <div class="dbox purple">LLM 모듈<br><small>요약·생성·추론</small></div>
+    <span class="arrow">+</span>
+    <div class="dbox blue">컴퓨팅 모듈<br><small>정확 계산·DB·보안</small></div>
+    <span class="arrow">+</span>
+    <div class="dbox green">도구 모듈<br><small>검색·API·MCP</small></div>
+    <span class="arrow">=</span>
+    <div class="dbox gold">생산성 워크플로우</div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE 1: TABLE OF CONTENTS -->
+<!-- ============================================================ -->
+<div class="slide" data-act="0">
+  <h2 class="fade-in-up">강의 흐름 <span class="highlight">120분</span></h2>
+  <ul class="toc-list fade-in-up delay1">
+    <li><span class="toc-time">0:00</span> <div class="dbox purple" style="padding:8px 16px; min-width:auto; font-size:0.9rem;">1막</div> 마인드셋 세팅 <span style="color:var(--text2); margin-left:auto;">10분</span></li>
+    <li><span class="toc-time">0:10</span> <div class="dbox blue" style="padding:8px 16px; min-width:auto; font-size:0.9rem;">2막</div> LLM 개념 — 확률적 함수 모듈 <span style="color:var(--text2); margin-left:auto;">30분</span></li>
+    <li><span class="toc-time">0:40</span> <div class="dbox green" style="padding:8px 16px; min-width:auto; font-size:0.9rem;">3막</div> 아키텍처 — 도구·RAG·컨텍스트 <span style="color:var(--text2); margin-left:auto;">25분</span></li>
+    <li><span class="toc-time">1:05</span> <div style="padding:8px 16px; background:var(--surface2); border-radius:12px; font-size:0.9rem; font-weight:700;">휴식</div> 쉬는 시간 <span style="color:var(--text2); margin-left:auto;">10분</span></li>
+    <li><span class="toc-time">1:15</span> <div class="dbox gold" style="padding:8px 16px; min-width:auto; font-size:0.9rem;">4막</div> 생산성 — 실전 워크플로우 <span style="color:var(--text2); margin-left:auto;">25분</span></li>
+    <li><span class="toc-time">1:40</span> <div class="dbox red" style="padding:8px 16px; min-width:auto; font-size:0.9rem;">5막</div> 모델 선택·보안·마무리 <span style="color:var(--text2); margin-left:auto;">20분</span></li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<!-- ACT 1: MINDSET -->
+<!-- ============================================================ -->
+<div class="slide" data-act="1">
+  <div class="act-badge act1">1막 · 마인드셋</div>
+  <h2 class="fade-in-up" style="text-align:center;">AI 활용 <span class="highlight">3원칙</span></h2>
+  <p class="fade-in-up delay1" style="text-align:center; margin-bottom:32px; color:var(--text2);">
+    이 세 가지를 체화하면, 나머지는 자연스럽게 따라옵니다
+  </p>
+  <div class="card-grid g3 fade-in-up delay2" style="max-width:1100px;">
+    <div class="card" style="border-top:3px solid var(--warn);">
+      <h4><span class="warn">원칙 1</span></h4>
+      <h3 style="font-size:1.3rem; color:var(--text);">LLM에게 멍청함을<br>들키지 마라</h3>
+      <p style="margin-top:12px;">질문 품질 = 답변 품질<br><br>
+        <strong>역할</strong> → <strong>목적</strong> → <strong>제약</strong> → <strong>출력 형식</strong><br>
+        이 네 가지를 명시하면 답이 달라진다
+      </p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--success);">
+      <h4><span class="success">원칙 2</span></h4>
+      <h3 style="font-size:1.3rem; color:var(--text);">캡처 → 붙여넣기<br>습관화</h3>
+      <p style="margin-top:12px;">에러 메시지, UI, 데이터 —<br>텍스트로 설명하지 말고<br><strong>스크린샷을 직접 넣어라</strong><br><br>
+        설명 시간 ↓ &nbsp; 정확도 ↑
+      </p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--info);">
+      <h4><span class="info">원칙 3</span></h4>
+      <h3 style="font-size:1.3rem; color:var(--text);">LLM은 지식의 샘<br>컨텍스트가 양동이</h3>
+      <p style="margin-top:12px;">넓게 내리면 <span class="warn">탁한 물</span><br>좁게 내리면 <span class="success">맑은 물</span><br><br>
+        차원을 좁혀서 깊게 파라<br>
+        <small style="color:var(--text2);">→ 컨텍스트 윈도우 원리와 직결</small>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: Bad vs Good Prompt -->
+<!-- ============================================================ -->
+<div class="slide" data-act="1">
+  <div class="act-badge act1">1막 · 마인드셋</div>
+  <h2 class="fade-in-up">프롬프트 <span class="warn">Before</span> vs <span class="success">After</span></h2>
+  <div class="card-grid g2 fade-in-up delay1" style="max-width:900px; margin-top:20px;">
+    <div class="card" style="border-left:4px solid var(--warn);">
+      <h4 style="color:var(--warn);">Bad Prompt</h4>
+      <code style="display:block; margin-top:12px; white-space:pre-wrap; font-size:0.95rem; line-height:1.7; color:var(--text2);">마케팅 전략 알려줘</code>
+      <p style="margin-top:16px; font-size:0.9rem;">→ 일반론, 교과서 답변, 어디서든 볼 수 있는 내용</p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--success);">
+      <h4 style="color:var(--success);">Good Prompt</h4>
+      <code style="display:block; margin-top:12px; white-space:pre-wrap; font-size:0.95rem; line-height:1.7; color:var(--text2);">역할: B2B SaaS 마케팅 디렉터
+목적: 월 예산 500만원으로 리드 200개 확보
+제약: 한국 시장, 직원 10명 이하
+출력: 채널별 예산 배분표 + 주간 KPI</code>
+      <p style="margin-top:16px; font-size:0.9rem;">→ 구체적, 실행 가능, 즉시 활용 가능</p>
+    </div>
+  </div>
+  <p class="fade-in-up delay2" style="margin-top:24px; text-align:center; font-size:1.2rem;">
+    같은 AI, 같은 모델 — <span class="highlight">질문이 다르면 세계가 다르다</span>
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- ACT 2: LLM DEFINITION -->
+<!-- ============================================================ -->
+<div class="slide" data-act="2">
+  <div class="act-badge act2">2막 · 개념</div>
+  <h2 class="fade-in-up">LLM = <span class="highlight">다음 토큰 예측기</span></h2>
+  <p class="fade-in-up delay1" style="max-width:800px; text-align:center; margin-bottom:24px;">
+    예측을 너무 잘해서 <em>대화하는 것처럼</em> 보이는 것
+  </p>
+  <div class="fade-in-up delay2" style="background:var(--surface); border-radius:16px; padding:32px 40px; max-width:800px; text-align:center;">
+    <p style="font-size:1.4rem; color:var(--text); margin-bottom:16px;">
+      "I do not like green eggs and <span class="highlight" style="font-size:1.8rem; font-weight:900;">___</span>"
+    </p>
+    <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:20px;">
+      <div style="background:var(--accent); padding:10px 20px; border-radius:8px; min-width:100px;">
+        <div style="font-weight:900; font-size:1.3rem;">ham</div>
+        <div style="font-size:0.8rem; opacity:0.8;">92.3%</div>
+      </div>
+      <div style="background:var(--surface2); padding:10px 20px; border-radius:8px; min-width:100px;">
+        <div style="font-weight:700;">cheese</div>
+        <div style="font-size:0.8rem; color:var(--text2);">3.1%</div>
+      </div>
+      <div style="background:var(--surface2); padding:10px 20px; border-radius:8px; min-width:100px;">
+        <div style="font-weight:700;">spam</div>
+        <div style="font-size:0.8rem; color:var(--text2);">1.8%</div>
+      </div>
+      <div style="background:var(--surface2); padding:10px 20px; border-radius:8px; min-width:100px;">
+        <div style="font-weight:700;">...</div>
+        <div style="font-size:0.8rem; color:var(--text2);">2.8%</div>
+      </div>
+    </div>
+  </div>
+  <p class="fade-in-up delay3" style="margin-top:20px; font-size:1rem; color:var(--text2); text-align:center;">
+    이 과정을 수천~수만 번 반복 → 하나의 "답변"이 완성
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: Non-deterministic -->
+<!-- ============================================================ -->
+<div class="slide" data-act="2">
+  <div class="act-badge act2">2막 · 개념</div>
+  <h2 class="fade-in-up">같은 질문, <span class="warn">다른 답</span></h2>
+  <p class="fade-in-up delay1" style="text-align:center; margin-bottom:24px;">LLM은 <strong>비결정론적</strong> — Temperature가 창의성 다이얼</p>
+  <div class="card-grid g3 fade-in-up delay2" style="max-width:900px;">
+    <div class="card" style="text-align:center;">
+      <div class="big-number info" style="font-size:3rem;">0.0</div>
+      <h4 style="margin-top:8px;">Low Temperature</h4>
+      <p>거의 같은 답 반복<br>사실 확인, 코드 생성<br><span class="info">정확성 우선</span></p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="big-number highlight" style="font-size:3rem;">0.7</div>
+      <h4 style="margin-top:8px;">Medium</h4>
+      <p>적당한 변형<br>일반 대화, 요약<br><span class="highlight">균형</span></p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="big-number warn" style="font-size:3rem;">1.5</div>
+      <h4 style="margin-top:8px;">High Temperature</h4>
+      <p>매번 다른 답<br>브레인스토밍, 창작<br><span class="warn">창의성 우선</span></p>
+    </div>
+  </div>
+  <p class="fade-in-up delay3" style="margin-top:20px; text-align:center; color:var(--text2);">
+    Temperature=0에서도 배치 처리·부동소수점 연산으로 미세한 차이 발생
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: Format Induction -->
+<!-- ============================================================ -->
+<div class="slide" data-act="2">
+  <div class="act-badge act2">2막 · 개념</div>
+  <h2 class="fade-in-up">출력 형식을 <span class="highlight">지정</span>할 수 있다</h2>
+  <p class="fade-in-up delay1" style="text-align:center; margin-bottom:20px;">같은 내용도 프롬프트에 따라 표·목록·JSON으로 변환</p>
+  <div class="card-grid g3 fade-in-up delay2" style="max-width:1000px;">
+    <div class="card">
+      <h4 style="color:var(--accent2);">자연어</h4>
+      <code style="display:block; margin-top:8px; white-space:pre-wrap; font-size:0.85rem;">서울의 인구는 약 950만 명이며,
+면적은 605km²입니다.</code>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--success);">표 형식</h4>
+      <code style="display:block; margin-top:8px; white-space:pre-wrap; font-size:0.85rem;">| 항목 | 값       |
+|------|---------|
+| 인구 | 950만명  |
+| 면적 | 605km²  |</code>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">JSON</h4>
+      <code style="display:block; margin-top:8px; white-space:pre-wrap; font-size:0.85rem;">{
+  "city": "서울",
+  "population": 9500000,
+  "area_km2": 605
+}</code>
+    </div>
+  </div>
+  <p class="fade-in-up delay3" style="margin-top:20px; text-align:center; font-size:1.1rem;">
+    <span class="highlight">원칙 1</span>의 실전 — "출력 형식"을 명시하면 답이 달라진다
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: Module Thinking -->
+<!-- ============================================================ -->
+<div class="slide" data-act="2">
+  <div class="act-badge act2">2막 · 개념</div>
+  <h2 class="fade-in-up">모듈 사고: <span class="highlight">레고 블록</span>처럼 조합</h2>
+  <p class="fade-in-up delay1" style="text-align:center; margin-bottom:30px;">
+    "LLM이 전부 한다" ✕ &nbsp;&nbsp;→&nbsp;&nbsp; "각 모듈이 잘하는 것을 한다" ✓
+  </p>
+  <div class="card-grid g3 fade-in-up delay2" style="max-width:1000px;">
+    <div class="card" style="border-top:3px solid var(--accent);">
+      <h4 style="color:var(--accent2);">LLM 모듈</h4>
+      <ul style="list-style:none; margin-top:10px;">
+        <li>✦ 요약·번역·생성</li>
+        <li>✦ 패턴 인식</li>
+        <li>✦ 비정형 데이터 처리</li>
+        <li>✦ 자연어 인터페이스</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top:3px solid var(--info);">
+      <h4 style="color:var(--info);">컴퓨팅 모듈</h4>
+      <ul style="list-style:none; margin-top:10px;">
+        <li>✦ 정확한 수치 계산</li>
+        <li>✦ DB / ETL 파이프라인</li>
+        <li>✦ 인증·암호화·보안</li>
+        <li>✦ 시스템 모니터링</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top:3px solid var(--success);">
+      <h4 style="color:var(--success);">도구 모듈</h4>
+      <ul style="list-style:none; margin-top:10px;">
+        <li>✦ 웹 검색·API 호출</li>
+        <li>✦ 파일 시스템 접근</li>
+        <li>✦ MCP 서버 연결</li>
+        <li>✦ 코드 실행 환경</li>
+      </ul>
+    </div>
+  </div>
+  <p class="fade-in-up delay3" style="margin-top:20px; text-align:center; color:var(--warn); font-size:1.1rem;">
+    "급여 계산을 LLM에 맡기시겠습니까?" — 모듈을 잘못 쓰면 사고
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: AI Strengths -->
+<!-- ============================================================ -->
+<div class="slide" data-act="2">
+  <div class="act-badge act2">2막 · 개념</div>
+  <h2 class="fade-in-up">AI가 <span class="success">잘하는 것</span> 5가지</h2>
+  <div class="card-grid g5 fade-in-up delay1" style="max-width:1200px; margin-top:20px;">
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">🔍</div>
+      <h4>인사이트 가속</h4>
+      <p style="font-size:0.85rem;">패턴 인식·요약<br>의사결정 <em>준비</em> 가속</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">♾️</div>
+      <h4>무한 반복</h4>
+      <p style="font-size:0.85rem;">분류·변환·처리<br>지치지 않는 워커</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">👥</div>
+      <h4>멀티 에이전트</h4>
+      <p style="font-size:0.85rem;">역할 분리된<br>다관점 협업</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">🎯</div>
+      <h4>코칭·컨설팅</h4>
+      <p style="font-size:0.85rem;">사고 구조화<br>아이디어 외재화</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">📈</div>
+      <h4>학습 가속</h4>
+      <p style="font-size:0.85rem;">주니어 <span class="success">+34%</span><br>초보자일수록 효과↑</p>
+    </div>
+  </div>
+  <p class="fade-in-up delay2" style="margin-top:20px; text-align:center; font-size:1rem;">
+    Copilot 코딩 <span class="success">55.8% 빠름</span> &nbsp;|&nbsp; 컨설팅 <span class="success">25% 빠름</span> &nbsp;|&nbsp; HBR <span class="success">56% 시간 절감</span>
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: LLM Limitations -->
+<!-- ============================================================ -->
+<div class="slide" data-act="2">
+  <div class="act-badge act2">2막 · 개념</div>
+  <h2 class="fade-in-up">LLM이 <span class="warn">못하는 것</span> — 정직한 한계</h2>
+  <div class="card-grid g2 fade-in-up delay1" style="max-width:1000px; margin-top:20px;">
+    <div class="card" style="border-left:4px solid var(--warn);">
+      <h4><span class="warn">환각 (Hallucination)</span></h4>
+      <p>평균 환각률 <strong>~9.2%</strong><br>
+        o3 모델: 추론 강화에도 <strong style="color:var(--warn);">33%</strong> 환각<br>
+        법률 판례 검색 시 <strong>75%+</strong> 오류
+      </p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--gold);">
+      <h4><span class="gold">편향 (Bias)</span></h4>
+      <p>성별 편향 제거 → 인종 편향 악화<br>
+        10개 모델 테스트에서 반복 확인<br>
+        큐레이션 데이터셋으로 <strong>40%↓</strong> 가능
+      </p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--info);">
+      <h4><span class="info">비용 (Cost)</span></h4>
+      <p>2026 글로벌 AI OpEx <strong>$500B+</strong><br>
+        토큰 가격: $0.27 ~ $15 / 1M 입력<br>
+        은닉 비용: 미세조정·파이프라인·검증
+      </p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--accent2);">
+      <h4><span class="highlight">일관성 (Consistency)</span></h4>
+      <p>평가 판정의 <strong style="color:var(--warn);">48.4%</strong>가<br>
+        순서만 바꾸면 뒤집힘<br>
+        → 위치 편향은 구조적 문제
+      </p>
+    </div>
+  </div>
+  <p class="fade-in-up delay2" style="margin-top:24px; text-align:center; font-size:1.15rem;">
+    <span class="warn">과신하면 사고</span> — "그래서 어떤 모듈을 언제 쓰느냐"가 핵심
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- ACT 3: ARCHITECTURE -->
+<!-- ============================================================ -->
+<div class="slide" data-act="3">
+  <div class="act-badge act3">3막 · 아키텍처</div>
+  <h2 class="fade-in-up">도구 증강 LLM — <span class="highlight">CodeAct 루프</span></h2>
+  <p class="fade-in-up delay1" style="text-align:center; margin-bottom:24px;">
+    LLM이 도구를 직접 호출하고, 결과를 보고, 다음 행동을 결정
+  </p>
+  <div class="flow-steps fade-in-up delay2">
+    <div class="flow-step"><div class="num">1</div><br>코드<br>생성</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step"><div class="num">2</div><br>샌드박스<br>실행</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step"><div class="num">3</div><br>결과<br>수신</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step"><div class="num">4</div><br>다음 행동<br>결정</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step" style="border-color:var(--success);"><div class="num" style="background:var(--success);">5</div><br>최종<br>출력</div>
+  </div>
+  <div class="card-grid g3 fade-in-up delay3" style="max-width:1000px; margin-top:24px;">
+    <div class="card" style="text-align:center;">
+      <h4 style="color:var(--accent2);">MCP</h4>
+      <p style="font-size:0.9rem;">LLM ↔ 외부 도구<br><strong>"USB-C 같은 표준"</strong><br>OpenAI·Google·MS 채택<br>10,000+ 활성 서버</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h4 style="color:var(--success);">에이전트 프레임워크</h4>
+      <p style="font-size:0.9rem;">LangGraph · CrewAI · AutoGen<br>GitHub 리포 <span class="success">535%↑</span><br>SDK 다운로드 <span class="success">97M+/월</span></p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h4 style="color:var(--gold);">컴퓨터 사용 에이전트</h4>
+      <p style="font-size:0.9rem;">Claude Computer Use<br>ChatGPT Atlas<br>Perplexity Comet<br>화면을 직접 조작</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: RAG -->
+<!-- ============================================================ -->
+<div class="slide" data-act="3">
+  <div class="act-badge act3">3막 · 아키텍처</div>
+  <h2 class="fade-in-up">RAG — <span class="highlight">데이터를 먹이는 기술</span></h2>
+  <p class="fade-in-up delay1" style="text-align:center; margin-bottom:20px;">
+    AI 활용성 = <strong>정확한 데이터를 찾아 먹이는 능력</strong>
+  </p>
+  <div class="card-grid g2 fade-in-up delay2" style="max-width:900px; margin-bottom:20px;">
+    <div class="card">
+      <h4 style="color:var(--info);">키워드 검색 (BM25)</h4>
+      <p>단어 매칭 · 정확 검색<br>"계약서 제7조" → 정확히 그 조항<br><span class="info">정확한 용어를 알 때</span></p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--accent2);">시맨틱 검색 (벡터)</h4>
+      <p>의미 매칭 · 유사도 검색<br>"해고 관련 조항" → 관련 조항 전부<br><span class="highlight">의도를 파악할 때</span></p>
+    </div>
+  </div>
+  <h3 class="fade-in-up delay3" style="text-align:center;">RAG 파이프라인 5단계</h3>
+  <div class="flow-steps fade-in-up delay3">
+    <div class="flow-step"><div class="num">1</div><br>문서<br>수집</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step"><div class="num">2</div><br>텍스트<br>추출</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step"><div class="num">3</div><br>청킹<br><small>256-512토큰</small></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step"><div class="num">4</div><br>벡터<br>검색</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step" style="border-color:var(--success);"><div class="num" style="background:var(--success);">5</div><br>답변<br>생성</div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: Context Window -->
+<!-- ============================================================ -->
+<div class="slide" data-act="3">
+  <div class="act-badge act3">3막 · 아키텍처</div>
+  <h2 class="fade-in-up">컨텍스트 윈도우 — <span class="warn">크다고 좋은 게 아니다</span></h2>
+  <div class="bar-chart fade-in-up delay1">
+    <div class="bar-row"><div class="bar-label">Llama 4 Scout</div><div class="bar-track"><div class="bar-fill" style="width:100%; background:var(--gradient3);">10M 토큰</div></div></div>
+    <div class="bar-row"><div class="bar-label">Gemini 3 Pro</div><div class="bar-track"><div class="bar-fill" style="width:10%; background:var(--gradient4);">1M</div></div></div>
+    <div class="bar-row"><div class="bar-label">GPT-5</div><div class="bar-track"><div class="bar-fill" style="width:4%; background:var(--gradient5);">400K</div></div></div>
+    <div class="bar-row"><div class="bar-label">Claude Opus 4.5</div><div class="bar-track"><div class="bar-fill" style="width:2%; background:var(--gradient1);">200K</div></div></div>
+    <div class="bar-row"><div class="bar-label">DeepSeek V3.2</div><div class="bar-track"><div class="bar-fill" style="width:1.3%; background:var(--gradient2);">128K</div></div></div>
+  </div>
+  <div class="card-grid g2 fade-in-up delay2" style="max-width:900px; margin-top:16px;">
+    <div class="card" style="text-align:center;">
+      <h4 style="color:var(--warn);">Lost in the Middle</h4>
+      <div class="u-curve-container">
+        <svg viewBox="0 0 300 120">
+          <path d="M20,30 Q150,110 280,30" fill="none" stroke="#fd79a8" stroke-width="3"/>
+          <text x="20" y="24" fill="#00b894" font-size="11" font-weight="700">85-95%</text>
+          <text x="120" y="115" fill="#fd79a8" font-size="11" font-weight="700">76-82%</text>
+          <text x="240" y="24" fill="#00b894" font-size="11" font-weight="700">85-95%</text>
+          <text x="10" y="90" fill="#b2bec3" font-size="9">시작</text>
+          <text x="135" y="90" fill="#b2bec3" font-size="9">중간</text>
+          <text x="255" y="90" fill="#b2bec3" font-size="9">끝</text>
+        </svg>
+      </div>
+      <p style="font-size:0.85rem;">시작·끝은 잘 보지만<br><span class="warn">중간은 놓친다</span></p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h4 style="color:var(--gold);">Context Rot</h4>
+      <p style="margin-top:16px;">컨텍스트가 커질수록<br><strong>핵심이 흐려진다</strong><br><br>
+        실효 윈도우는 공칭의<br><span class="warn" style="font-size:1.8rem; font-weight:900;">~1%</span><br>일 수 있다
+      </p>
+    </div>
+  </div>
+  <p class="fade-in-up delay3" style="margin-top:16px; text-align:center; color:var(--accent2);">
+    → <strong>원칙 3</strong> 재확인: 슬림한 컨텍스트, 중요 정보를 시작/끝에 배치
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- BREAK SLIDE -->
+<!-- ============================================================ -->
+<div class="slide" data-act="0">
+  <div style="text-align:center;">
+    <div class="big-number highlight fade-in-up pulse" style="font-size:6rem;">☕</div>
+    <h1 class="fade-in-up delay1" style="margin-top:20px;">쉬는 시간</h1>
+    <h3 class="fade-in-up delay2" style="color:var(--text2); font-weight:400;">10분 후 돌아와 주세요</h3>
+    <p class="fade-in-up delay3" style="margin-top:32px; font-size:1.1rem; color:var(--text2);">
+      지금까지: LLM 본질 → 강점/한계 → 도구 증강 → RAG → 컨텍스트<br>
+      다음: <span class="highlight">실전 생산성 워크플로우</span>
+    </p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ACT 4: PRODUCTIVITY -->
+<!-- ============================================================ -->
+<div class="slide" data-act="4">
+  <div class="act-badge act4">4막 · 생산성</div>
+  <h2 class="fade-in-up">현실: <span class="warn">88%</span> 도입 → <span class="warn">39%</span>만 성과</h2>
+  <p class="fade-in-up delay1" style="text-align:center; max-width:700px; margin-bottom:24px;">
+    AI는 의사결정 <em>질</em>을 대신 올리는 게 아니라, 의사결정 <strong class="highlight">준비</strong>를 가속한다
+  </p>
+  <div class="card-grid g3 fade-in-up delay2" style="max-width:1050px;">
+    <div class="card" style="text-align:center; border-top:3px solid var(--info);">
+      <h4>대기업</h4>
+      <p style="font-size:0.9rem;">회의록 자동 정리<br>경영진 브리프 생성<br>문서 리뷰 가속<br><br><span class="info">워크플로우 재설계 시<br>성공률 2배</span></p>
+    </div>
+    <div class="card" style="text-align:center; border-top:3px solid var(--accent2);">
+      <h4>중견기업</h4>
+      <p style="font-size:0.9rem;">가상 보조 인력<br>고객 대응 자동화<br>데이터 분석 가속<br><br><span class="highlight">"Copilot 함정" 주의<br>프로세스 변경 필수</span></p>
+    </div>
+    <div class="card" style="text-align:center; border-top:3px solid var(--success);">
+      <h4>소규모/1인</h4>
+      <p style="font-size:0.9rem;">AI VA vs 인간 VA<br>비용 40-60% 절감<br>24시간 대응<br><br><span class="success">가장 빠른 ROI<br>진입 장벽 낮음</span></p>
+    </div>
+  </div>
+  <div class="fade-in-up delay3" style="margin-top:24px; background:var(--surface); border-radius:12px; padding:16px 24px; max-width:700px; text-align:center;">
+    <span class="warn" style="font-weight:700;">생산성 역설:</span> 절약 시간의 <strong>37-40%</strong>가 AI 출력 검토에 소비 → "AI 세금"
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: 5 Repetitive Tasks -->
+<!-- ============================================================ -->
+<div class="slide" data-act="4">
+  <div class="act-badge act4">4막 · 생산성</div>
+  <h2 class="fade-in-up">내일 당장 자동화할 <span class="highlight">반복 업무 5가지</span></h2>
+  <div class="card-grid g5 fade-in-up delay1" style="max-width:1200px; margin-top:20px;">
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">📝</div>
+      <h4>회의록 정리</h4>
+      <p style="font-size:0.8rem;">녹음/텍스트 →<br>요약 + 결정사항 +<br>액션아이템 표</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">📊</div>
+      <h4>보고서 초안</h4>
+      <p style="font-size:0.8rem;">데이터 →<br>아웃라인 + 3줄 브리프 +<br>근거 표</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">🏷️</div>
+      <h4>텍스트 분류</h4>
+      <p style="font-size:0.8rem;">대량 피드백 →<br>카테고리 + 우선순위<br>자동 태깅</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">📋</div>
+      <h4>문서 구조화</h4>
+      <p style="font-size:0.8rem;">규정 문서 →<br>체크리스트 +<br>FAQ 변환</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">🎓</div>
+      <h4>학습·온보딩</h4>
+      <p style="font-size:0.8rem;">내부 위키 →<br>Q&A 봇 +<br>맞춤 가이드</p>
+    </div>
+  </div>
+  <p class="fade-in-up delay2" style="margin-top:24px; text-align:center; font-size:1rem; color:var(--text2);">
+    각각 Before/After를 비교해보세요 — <span class="success">평균 50-70% 시간 절감</span>
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: GOLDEN Framework -->
+<!-- ============================================================ -->
+<div class="slide" data-act="4">
+  <div class="act-badge act4">4막 · 생산성</div>
+  <h2 class="fade-in-up">프롬프트 프레임워크: <span class="gold">GOLDEN</span></h2>
+  <div class="card-grid g3 fade-in-up delay1" style="max-width:1050px; margin-top:20px;">
+    <div class="card" style="border-top:3px solid var(--gold);">
+      <h4><span class="gold">G</span>oal — 목표</h4>
+      <p>무엇을 달성하고 싶은가?<br><code>B2B SaaS 리드 200개/월</code></p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--gold);">
+      <h4><span class="gold">O</span>utput — 출력</h4>
+      <p>형식·길이·톤<br><code>표 형식, 500자, 비즈니스 톤</code></p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--gold);">
+      <h4><span class="gold">L</span>imits — 제약</h4>
+      <p>범위·규칙·예산<br><code>한국 시장, 월 500만원</code></p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--gold);">
+      <h4><span class="gold">D</span>ata — 데이터</h4>
+      <p>맥락·예시·참고자료<br><code>지난달 캠페인 성과 첨부</code></p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--gold);">
+      <h4><span class="gold">E</span>valuation — 평가</h4>
+      <p>성공 기준<br><code>CPL ₩25,000 이하</code></p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--gold);">
+      <h4><span class="gold">N</span>— 대안(Fallback)</h4>
+      <p>확신 &lt;70%면<br><code>대안 2개를 제시해줘</code></p>
+    </div>
+  </div>
+  <p class="fade-in-up delay2" style="margin-top:20px; text-align:center; font-size:1.1rem;">
+    6개를 다 채울 필요 없다 — <span class="highlight">G·O·L만 있어도 답이 달라진다</span>
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: Vibe Coding -->
+<!-- ============================================================ -->
+<div class="slide" data-act="4">
+  <div class="act-badge act4">4막 · 생산성</div>
+  <h2 class="fade-in-up">바이브 코딩 — <span class="highlight">자연어로 앱을 만든다</span></h2>
+  <p class="fade-in-up delay1" style="text-align:center; margin-bottom:20px;">
+    Y Combinator 2025 겨울: 스타트업 <strong>25%</strong>가 코드 <strong>95%</strong>를 AI로 생성
+  </p>
+  <div class="card-grid g4 fade-in-up delay2" style="max-width:1100px;">
+    <div class="card" style="text-align:center;">
+      <h4 style="color:var(--accent2);">Cursor</h4>
+      <p style="font-size:0.85rem;">AI 네이티브 IDE<br>코드베이스 전체 인식<br>멀티파일 편집</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h4 style="color:var(--success);">GitHub Copilot</h4>
+      <p style="font-size:0.85rem;">시장 점유율 <strong>68%</strong><br>VS Code 통합<br>Agent Mode</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h4 style="color:var(--gold);">Claude Code</h4>
+      <p style="font-size:0.85rem;">터미널 에이전트<br>SWE-bench <strong>82.1%</strong><br>풀스택 자율 코딩</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <h4 style="color:var(--info);">Replit / v0 / Bolt</h4>
+      <p style="font-size:0.85rem;">브라우저 기반<br>한 줄로 배포<br>비개발자 접근</p>
+    </div>
+  </div>
+  <div class="card-grid g2 fade-in-up delay3" style="max-width:800px; margin-top:16px;">
+    <div class="card" style="border-left:4px solid var(--success); text-align:center;">
+      <div class="big-number success" style="font-size:2.5rem;">126%</div>
+      <p style="font-size:0.9rem;">주당 완료 프로젝트 증가<br><small>GitHub Copilot 사용자</small></p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--warn); text-align:center;">
+      <div class="big-number warn" style="font-size:2.5rem;">24.7%</div>
+      <p style="font-size:0.9rem;">AI 생성 코드 보안 취약률<br><small>비AI 대비 2.74배</small></p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ACT 5: MODEL LANDSCAPE -->
+<!-- ============================================================ -->
+<div class="slide" data-act="5">
+  <div class="act-badge act5">5막 · 실전</div>
+  <h2 class="fade-in-up">4대 모델 <span class="highlight">포지셔닝</span></h2>
+  <div class="card-grid g4 fade-in-up delay1" style="max-width:1150px; margin-top:20px;">
+    <div class="card" style="border-top:3px solid #10a37f;">
+      <h4 style="color:#10a37f;">ChatGPT</h4>
+      <p style="font-size:0.85rem;">
+        <strong>생산성 툴체인</strong><br><br>
+        Projects (40파일)<br>
+        Canvas 2-pane 편집<br>
+        Deep Research<br>
+        시장점유율 <strong>68%</strong>
+      </p>
+    </div>
+    <div class="card" style="border-top:3px solid #d97706;">
+      <h4 style="color:#d97706;">Claude</h4>
+      <p style="font-size:0.85rem;">
+        <strong>코딩·에이전트</strong><br><br>
+        Claude Code (터미널)<br>
+        Computer Use<br>
+        Cowork GUI<br>
+        SWE-bench <strong>82.1%</strong>
+      </p>
+    </div>
+    <div class="card" style="border-top:3px solid #4285f4;">
+      <h4 style="color:#4285f4;">Gemini</h4>
+      <p style="font-size:0.85rem;">
+        <strong>Google 생태계</strong><br><br>
+        Workspace Studio<br>
+        1M-10M 토큰<br>
+        AIME 2025 <strong>95.0%</strong><br>
+        점유율 <strong>18.2%↑</strong>
+      </p>
+    </div>
+    <div class="card" style="border-top:3px solid #1d9bf0;">
+      <h4 style="color:#1d9bf0;">Grok</h4>
+      <p style="font-size:0.85rem;">
+        <strong>실시간·소셜</strong><br><br>
+        X 실시간 데이터<br>
+        DeepSearch<br>
+        2M 토큰<br>
+        <strong>$0.20/$0.50</strong> 최저가
+      </p>
+    </div>
+  </div>
+  <table class="cmp-table fade-in-up delay2" style="max-width:900px; margin-top:20px;">
+    <tr><th>업무</th><th>추천 모델</th><th>이유</th></tr>
+    <tr><td>코딩</td><td><strong>Claude</strong></td><td>SWE-bench 82.1%, 에이전트 코딩</td></tr>
+    <tr><td>수학·추론</td><td><strong>Gemini</strong></td><td>AIME 95%, GPQA 91.9%</td></tr>
+    <tr><td>글쓰기·창작</td><td><strong>ChatGPT</strong></td><td>Canvas 편집, 넓은 생태계</td></tr>
+    <tr><td>실시간 정보</td><td><strong>Grok</strong></td><td>X 통합, 웹 검색</td></tr>
+    <tr><td>비용 최적화</td><td><strong>DeepSeek</strong></td><td>$0.27/$1.10 최저 토큰 가격</td></tr>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: Security -->
+<!-- ============================================================ -->
+<div class="slide" data-act="5">
+  <div class="act-badge act5">5막 · 실전</div>
+  <h2 class="fade-in-up">보안 — <span class="warn">토큰은 클라우드로 간다</span></h2>
+  <div class="flow-steps fade-in-up delay1" style="margin-bottom:24px;">
+    <div class="flow-step">사용자<br>기기</div>
+    <span class="flow-arrow" style="color:var(--warn);">→</span>
+    <div class="flow-step" style="border-color:var(--warn);">네트워크<br><small style="color:var(--warn);">노출점 1</small></div>
+    <span class="flow-arrow" style="color:var(--warn);">→</span>
+    <div class="flow-step" style="border-color:var(--warn);">클라우드<br>데이터센터<br><small style="color:var(--warn);">노출점 2</small></div>
+    <span class="flow-arrow" style="color:var(--warn);">→</span>
+    <div class="flow-step">처리·응답</div>
+  </div>
+  <div class="card-grid g3 fade-in-up delay2" style="max-width:1050px;">
+    <div class="card" style="border-left:4px solid var(--warn);">
+      <h4 style="color:var(--warn);">핵심 경고 3줄</h4>
+      <ul style="list-style:none;">
+        <li style="margin:8px 0;">1. 토큰은 <strong>클라우드</strong>로 간다</li>
+        <li style="margin:8px 0;">2. "저장 안 함" ≠ <strong>리스크 제로</strong></li>
+        <li style="margin:8px 0;">3. 민감 정보는 <strong>최소화·마스킹</strong></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>제공사 데이터 정책</h4>
+      <p style="font-size:0.85rem;">
+        <strong>OpenAI:</strong> API 30일 보관, ChatGPT 학습 활용 가능<br>
+        <strong>Anthropic:</strong> 소비자 데이터 기본 학습 활용(옵트아웃 필요)<br>
+        <strong>Google:</strong> Vertex AI DPA 체결 시 학습 미활용
+      </p>
+    </div>
+    <div class="card">
+      <h4>실무 정책 체크리스트</h4>
+      <ul style="list-style:none; font-size:0.85rem;">
+        <li>☐ 제공사 보안 인증 평가</li>
+        <li>☐ 배포 방식 선택 (API/VPC/On-prem)</li>
+        <li>☐ 민감 정보 분류·마스킹</li>
+        <li>☐ AI 출력 검수 절차</li>
+        <li>☐ 계약·SLA 확인</li>
+      </ul>
+    </div>
+  </div>
+  <p class="fade-in-up delay3" style="margin-top:16px; text-align:center; font-size:0.95rem; color:var(--gold);">
+    EU AI Act 2026.08 전면 적용 (€35M 또는 글로벌 매출 7% 벌금) &nbsp;|&nbsp; 한국 AI 기본법 2026.01 시행
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: Final Summary -->
+<!-- ============================================================ -->
+<div class="slide" data-act="5">
+  <div class="act-badge act5">5막 · 마무리</div>
+  <h2 class="fade-in-up" style="text-align:center;">오늘의 핵심 — <span class="highlight">한 장 요약</span></h2>
+  <div class="card-grid g2 fade-in-up delay1" style="max-width:900px; margin-top:24px;">
+    <div class="card" style="border-top:3px solid var(--accent);">
+      <h4>① LLM = 확률적 모듈</h4>
+      <p>다음 토큰 예측기 + 오케스트레이터<br>챗봇이 아니라 <strong>함수</strong>처럼 사용</p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--info);">
+      <h4>② 컴퓨팅 = 정확·반복</h4>
+      <p>계산·DB·보안은 전통 컴퓨팅<br>모듈을 잘못 쓰면 사고</p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--success);">
+      <h4>③ 생산성 = 워크플로우</h4>
+      <p>도구만 넣으면 안 된다<br><strong>프로세스 재설계</strong>가 핵심</p>
+    </div>
+    <div class="card" style="border-top:3px solid var(--warn);">
+      <h4>④ 리스크 = 정책 + 검증</h4>
+      <p>환각·편향·비용·보안<br><strong>인간 검토</strong>는 선택이 아닌 필수</p>
+    </div>
+  </div>
+  <div class="fade-in-up delay2" style="margin-top:32px; text-align:center; background:var(--surface); border-radius:16px; padding:28px 40px; max-width:700px;">
+    <h3 style="color:var(--accent2); margin-bottom:16px;">3원칙 최종 확인</h3>
+    <p style="font-size:1.15rem; line-height:2;">
+      <span class="warn">❶</span> LLM에게 멍청함을 들키지 마라<br>
+      <span class="success">❷</span> 캡처 → 붙여넣기 습관화<br>
+      <span class="info">❸</span> 컨텍스트로 차원을 좁혀라
+    </p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SLIDE: Homework + End -->
+<!-- ============================================================ -->
+<div class="slide" data-act="5">
+  <div class="act-badge act5">5막 · 마무리</div>
+  <div style="text-align:center;">
+    <h2 class="fade-in-up">내일 당장 해볼 것 <span class="highlight">하나</span></h2>
+    <div class="fade-in-up delay1" style="margin-top:32px; background:var(--surface); border-radius:20px; padding:40px 48px; max-width:700px; display:inline-block;">
+      <p style="font-size:1.4rem; line-height:1.8; color:var(--text);">
+        오늘 받은 이메일 중 <strong>하나</strong>를<br>
+        AI에 붙여넣고 이렇게 요청하세요:
+      </p>
+      <div style="margin-top:24px; background:var(--surface2); border-radius:12px; padding:20px 28px; text-align:left;">
+        <code style="font-size:1.1rem; line-height:1.8; color:var(--accent2); background:none; white-space:pre-wrap;">이 이메일을 분석해서:
+1. 3줄 요약
+2. 핵심 요청사항 표 (항목 | 마감일 | 우선순위)
+3. 내가 해야 할 액션아이템 체크리스트
+로 정리해줘.</code>
+      </div>
+    </div>
+    <p class="fade-in-up delay2" style="margin-top:32px; font-size:1.3rem;">
+      <span class="highlight">작은 성공이 습관을 만듭니다</span>
+    </p>
+    <h1 class="fade-in-up delay3" style="margin-top:48px; font-size:2.5rem;">
+      감사합니다
+    </h1>
+    <p class="fade-in-up delay4" style="margin-top:8px; color:var(--text2);">Q&A</p>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const progress = document.getElementById('progress');
+const slideNum = document.getElementById('slide-num');
+let current = 0;
+
+function showSlide(n) {
+  if (n < 0 || n >= slides.length) return;
+  const dir = n > current ? 1 : -1;
+  slides[current].classList.remove('active');
+  slides[current].classList.add(dir > 0 ? 'exit-left' : '');
+  setTimeout(() => slides[current === 0 ? 0 : current].classList.remove('exit-left'), 500);
+
+  const old = current;
+  current = n;
+  slides[current].classList.add('active');
+
+  // Remove exit class from old slide after transition
+  setTimeout(() => { slides[old].classList.remove('exit-left'); }, 500);
+
+  // Update progress
+  const pct = ((current) / (slides.length - 1)) * 100;
+  progress.style.width = pct + '%';
+  slideNum.textContent = (current + 1) + ' / ' + slides.length;
+
+  // Update timer bar based on act
+  updateTimerBar();
+}
+
+function next() { showSlide(current + 1); }
+function prev() { showSlide(current - 1); }
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); next(); }
+  if (e.key === 'ArrowLeft' || e.key === 'Backspace') { e.preventDefault(); prev(); }
+  if (e.key === 'Home') { e.preventDefault(); showSlide(0); }
+  if (e.key === 'End') { e.preventDefault(); showSlide(slides.length - 1); }
+});
+
+// Touch/swipe
+let touchStartX = 0;
+document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+document.addEventListener('touchend', e => {
+  const diff = touchStartX - e.changedTouches[0].clientX;
+  if (Math.abs(diff) > 50) { diff > 0 ? next() : prev(); }
+});
+
+// Timer bar (approximate lecture time mapping)
+const timerBar = document.getElementById('timer-bar');
+function updateTimerBar() {
+  const pct = ((current) / (slides.length - 1)) * 100;
+  timerBar.style.width = pct + '%';
+}
+
+// Init
+showSlide(0);
+</script>
+</body>
+</html>
